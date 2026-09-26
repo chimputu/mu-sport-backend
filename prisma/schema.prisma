@@ -1,0 +1,248 @@
+/**
+ * @fileoverview Prisma schema for MU Sports platform.
+ * @copyright (c) Mulungushi University Sports Platform. All rights reserved.
+ * Owners: Kafiswe Chimputu and Elijah Manda, Full Stack Developers.
+ * This file is the intellectual property of MU Sports and may not be
+ * reproduced, distributed, or transmitted without the prior written
+ * permission of the owners.
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Users ----------
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(STUDENT)
+  studentId String?  @unique
+  college   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   TeamMember[]
+  bookings      Booking[]
+  registrations TeamRegistration[]
+
+  @@index([role])
+}
+
+enum Role {
+  STUDENT
+  CAPTAIN
+  ADMIN
+}
+
+// ---------- Sports and Teams ----------
+
+model Sport {
+  id    String @id @default(cuid())
+  name  String @unique
+  slug  String @unique
+  order Int    @default(0)
+
+  teams     Team[]
+  standings Standing[]
+
+  @@index([slug])
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  college   String
+  sportId   String
+  sport     Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     TeamMember[]
+  homeMatches Match[]     @relation("HomeTeam")
+  awayMatches Match[]     @relation("AwayTeam")
+  standings   Standing[]
+
+  @@unique([name, sportId])
+  @@index([sportId])
+  @@index([college])
+}
+
+model TeamMember {
+  id       String     @id @default(cuid())
+  userId   String
+  teamId   String
+  role     MemberRole @default(PLAYER)
+  joinedAt DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@index([teamId])
+}
+
+enum MemberRole {
+  PLAYER
+  CAPTAIN
+  COACH
+}
+
+// ---------- Venues and Bookings ----------
+
+model Venue {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  slug     String    @unique
+  type     VenueType
+  capacity Int?
+  active   Boolean   @default(true)
+
+  bookings Booking[]
+  matches  Match[]
+
+  @@index([type])
+}
+
+enum VenueType {
+  FOOTBALL_FIELD
+  BASKETBALL_COURT
+  NETBALL_COURT
+  VOLLEYBALL_COURT
+  BADMINTON_COURT
+  TABLE_TENNIS_HALL
+  ATHLETICS_TRACK
+  CHESS_ROOM
+}
+
+model Booking {
+  id        String        @id @default(cuid())
+  userId    String
+  venueId   String
+  startTime DateTime
+  endTime   DateTime
+  purpose   String?
+  status    BookingStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@index([venueId, startTime])
+  @@index([userId])
+  @@index([status])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+// ---------- Matches ----------
+
+model Match {
+  id         String      @id @default(cuid())
+  homeTeamId String
+  awayTeamId String
+  venueId    String?
+  kickoff    DateTime
+  homeScore  Int?
+  awayScore  Int?
+  status     MatchStatus @default(SCHEDULED)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  homeTeam Team         @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Cascade)
+  awayTeam Team         @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Cascade)
+  venue    Venue?       @relation(fields: [venueId], references: [id])
+  events   MatchEvent[]
+
+  @@index([kickoff])
+  @@index([status])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  POSTPONED
+  CANCELLED
+}
+
+model MatchEvent {
+  id       String    @id @default(cuid())
+  matchId  String
+  minute   Int?
+  type     EventType
+  playerId String?
+  detail   String?
+  match    Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+}
+
+enum EventType {
+  GOAL
+  YELLOW_CARD
+  RED_CARD
+  SUBSTITUTION
+  PERIOD_START
+  PERIOD_END
+}
+
+// ---------- Standings ----------
+
+model Standing {
+  id           String @id @default(cuid())
+  teamId       String
+  sportId      String
+  played       Int    @default(0)
+  won          Int    @default(0)
+  drawn        Int    @default(0)
+  lost         Int    @default(0)
+  points       Int    @default(0)
+  goalsFor     Int    @default(0)
+  goalsAgainst Int    @default(0)
+
+  team  Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sport Sport @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, sportId])
+  @@index([sportId, points])
+}
+
+// ---------- Registrations ----------
+
+model TeamRegistration {
+  id        String             @id @default(cuid())
+  teamName  String
+  sportId   String
+  userId    String
+  status    RegistrationStatus @default(PENDING)
+  notes     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+enum RegistrationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
